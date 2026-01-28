@@ -402,8 +402,10 @@ export async function POST(req: Request) {
 
 const buffer = await Packer.toBuffer(doc);
 
-// ✅ Fix definitivo: Blob es BodyInit válido y evita SharedArrayBuffer en types
-const blob = new Blob([buffer], {
+// ✅ IMPORTANT: crear Uint8Array "independiente" (no usar buffer.buffer)
+const bytes = Uint8Array.from(buffer);
+
+const blob = new Blob([bytes], {
   type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 });
 
@@ -411,6 +413,8 @@ return new NextResponse(blob, {
   status: 200,
   headers: {
     "Content-Disposition": `attachment; filename="${filename}.docx"`,
+    "Content-Type":
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   },
 });
 
