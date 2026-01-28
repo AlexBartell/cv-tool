@@ -1,3 +1,4 @@
+// app/api/docx/route.ts
 import { NextResponse } from "next/server";
 import {
   Document,
@@ -14,18 +15,21 @@ import {
   BorderStyle,
 } from "docx";
 
-function parseDataUrlToBuffer(dataUrl: string) {
-  const match = dataUrl.match(/^data:(.+);base64,(.*)$/);
-  if (!match) return null;
-  return Buffer.from(match[2], "base64");
-}
+export const runtime = "nodejs"; // ✅ Vercel: evita Edge (Buffer + sharp)
+
+type RasterImageType = "jpg" | "png";
+
+/**
+ * Lee data URL: data:image/png;base64,....
+ */
 function parseDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(.+);base64,(.*)$/);
   if (!match) return null;
-  const mime = match[1]; // "image/jpeg" | "image/png" | ...
+  const mime = match[1]; // "image/jpeg" | "image/png" | "image/webp" | ...
   const buf = Buffer.from(match[2], "base64");
   return { mime, buf };
 }
+
 function stripBoldMarkers(s: string) {
   return s.replace(/\*\*/g, "");
 }
@@ -69,14 +73,10 @@ function removeTopNameHeading(md: string) {
 }
 
 /**
- * Extrae el contenido de:
+ * Extrae:
  * ## Datos de contacto
- * (líneas siguientes)
- * hasta el próximo heading "##"
- *
- * Devuelve:
- * - contactLines: líneas para cabecera
- * - bodyMarkdown: markdown sin esa sección
+ * (líneas)
+ * hasta el próximo ## ...
  */
 function extractContactSection(md: string) {
   const lines = md.split(/\r?\n/);
@@ -90,12 +90,12 @@ function extractContactSection(md: string) {
 
     if (t === "## Datos de contacto") {
       inContact = true;
-      continue; // omitimos el heading
+      continue;
     }
 
     if (inContact && t.startsWith("## ")) {
       inContact = false;
-      bodyLines.push(raw); // este heading va al cuerpo
+      bodyLines.push(raw);
       continue;
     }
 
@@ -110,10 +110,7 @@ function extractContactSection(md: string) {
 }
 
 /**
- * Normaliza líneas de contacto para que NO salgan como bullets/guiones y
- * queden en 1–2 líneas tipo ATS:
- * L1: Tel/Email
- * L2: Ciudad/LinkedIn
+ * Normaliza líneas de contacto (sin bullets) en 1-2 líneas tipo ATS
  */
 function normalizeContactLines(lines: string[]) {
   const clean = lines
@@ -133,14 +130,14 @@ function normalizeContactLines(lines: string[]) {
   if (line1Parts.length) out.push(line1Parts.join(" | "));
   if (line2Parts.length) out.push(line2Parts.join(" | "));
 
-  // fallback: usa 2 líneas limpias
   if (!out.length) return clean.slice(0, 2);
-
   return out;
 }
 
-function headingParagraph(text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) {
-  // Forzamos color negro para evitar tema (azul) en headings
+function headingParagraph(
+  text: string,
+  level: (typeof HeadingLevel)[keyof typeof HeadingLevel]
+) {
   return new Paragraph({
     heading: level,
     children: [
@@ -152,13 +149,16 @@ function headingParagraph(text: string, level: (typeof HeadingLevel)[keyof typeo
   });
 }
 
-// Convierte Markdown básico a Paragraphs (sin tablas en el cuerpo)
+/**
+ * Markdown básico a Paragraphs (sin tablas en el cuerpo)
+ */
 function markdownToParagraphs(md: string) {
   const lines = md.split(/\r?\n/);
   const paragraphs: Paragraph[] = [];
 
   for (const line of lines) {
     const t = line.trim();
+
     if (!t) {
       paragraphs.push(new Paragraph({ children: [new TextRun("")] }));
       continue;
@@ -168,7 +168,6 @@ function markdownToParagraphs(md: string) {
     if (h) {
       const level = h[1].length;
       const text = h[2];
-
       const heading =
         level === 1
           ? HeadingLevel.HEADING_1
@@ -219,7 +218,7 @@ function buildHeaderNoPhoto(name: string, contactLines: string[]) {
         new TextRun({
           text: name || "Nombre y Apellido",
           bold: true,
-          size: 34, // ~17pt
+          size: 34,
           color: "000000",
         }),
       ],
@@ -242,7 +241,12 @@ function buildHeaderNoPhoto(name: string, contactLines: string[]) {
   return children;
 }
 
-function buildHeaderWithPhoto(name: string, contactLines: string[], photoBuf: Buffer) {
+function buildHeaderWithPhoto(
+  name: string,
+  contactLines: string[],
+  photoBuf: Buffer,
+  photoType: RasterImageType
+) {
   const normalized = normalizeContactLines(contactLines);
 
   const left: Paragraph[] = [
@@ -276,10 +280,10 @@ function buildHeaderWithPhoto(name: string, contactLines: string[], photoBuf: Bu
       alignment: AlignmentType.RIGHT,
       children: [
         new ImageRun({
-  data: photoBuf,
-  type: photoType, // ✅ fuerza imagen raster (no svg)
-  transformation: { width: 110, height: 110 },
-}),
+          data: photoBuf,
+          type: photoType, // ✅ ahora sí existe
+          transformation: { width: 110, height: 110 },
+        }),
       ],
     }),
   ];
@@ -305,6 +309,45 @@ function buildHeaderWithPhoto(name: string, contactLines: string[], photoBuf: Bu
   });
 }
 
+/**
+ * Convierte WEBP -> PNG/JPG porque docx suele fallar con WEBP.
+ * - Usa import dinámico para que no reviente builds si sharp no está instalado aún.
+ */
+async function ensureDocxCompatibleImage(input: {
+  mime: string;
+  buf: Buffer;
+}): Promise<{ buf: Buffer; type: RasterImageType }> {
+  const { mime, buf } = input;
+
+  // PNG
+  if (/png/i.test(mime)) return { buf, type: "png" };
+
+  // JPEG/JPG
+  if (/jpe?g/i.test(mime)) return { buf, type: "jpg" };
+
+  // WEBP -> convertir
+  if (/webp/i.test(mime)) {
+    // Preferimos convertir a PNG por compatibilidad
+    try {
+      const sharp = (await import("sharp")).default;
+      const out = await sharp(buf).png().toBuffer();
+      return { buf: out, type: "png" };
+    } catch (e) {
+      // Si no hay sharp, devolvemos error claro
+      throw new Error("webp_not_supported_missing_sharp");
+    }
+  }
+
+  // Otros formatos: intentamos convertir a PNG con sharp
+  try {
+    const sharp = (await import("sharp")).default;
+    const out = await sharp(buf).png().toBuffer();
+    return { buf: out, type: "png" };
+  } catch (e) {
+    throw new Error("unsupported_image_type");
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { markdown, filename = "CV", photoDataUrl } = await req.json();
@@ -318,25 +361,31 @@ export async function POST(req: Request) {
 
     const name = extractName(markdown);
 
-    // 1) extrae contacto y elimina esa sección del cuerpo
+    // 1) extrae contacto y lo quita del cuerpo
     const { contactLines, bodyMarkdown } = extractContactSection(markdown);
 
-    // 2) elimina el # Nombre del cuerpo para evitar duplicación
+    // 2) evita duplicar "# Nombre"
     const bodyNoName = removeTopNameHeading(bodyMarkdown);
 
-    const parsed = photoDataUrl ? parseDataUrl(photoDataUrl) : null;
-const photoBuf = parsed?.buf ?? null;
-const photoType =
-  parsed?.mime?.includes("png") ? "png" :
-  parsed?.mime?.includes("webp") ? "jpg" : // docx no siempre soporta webp directo
-  "jpg";
+    // Foto (opcional)
+    let photoBuf: Buffer | null = null;
+    let photoType: RasterImageType | null = null;
 
+    if (photoDataUrl) {
+      const parsed = parseDataUrl(photoDataUrl);
+      if (parsed) {
+        // Asegurar formato soportado por docx
+        const converted = await ensureDocxCompatibleImage(parsed);
+        photoBuf = converted.buf;
+        photoType = converted.type;
+      }
+    }
 
     const children: any[] = [];
 
-    // Header: con foto (tabla), sin foto (párrafos normales)
-    if (photoBuf) {
-      children.push(buildHeaderWithPhoto(name, contactLines, photoBuf));
+    // Header con foto / sin foto
+    if (photoBuf && photoType) {
+      children.push(buildHeaderWithPhoto(name, contactLines, photoBuf, photoType));
     } else {
       children.push(...buildHeaderNoPhoto(name, contactLines));
     }
@@ -361,8 +410,29 @@ const photoType =
         "Content-Disposition": `attachment; filename="${filename}.docx"`,
       },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("DOCX route error:", err);
+
+    // Errores “predecibles” para Vercel/runtime
+    const msg = String(err?.message || err);
+    if (msg.includes("webp_not_supported_missing_sharp")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "webp_not_supported",
+          hint: "Instalá sharp (npm i sharp) o mandá la foto como PNG/JPG.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (msg.includes("unsupported_image_type")) {
+      return NextResponse.json(
+        { ok: false, error: "unsupported_image_type" },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { ok: false, error: "internal_error" },
       { status: 500 }
