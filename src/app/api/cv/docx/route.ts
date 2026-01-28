@@ -401,18 +401,20 @@ export async function POST(req: Request) {
     });
 
 const buffer = await Packer.toBuffer(doc);
-const body = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
 
-return new NextResponse(body, {
+// ✅ Fix definitivo: Blob es BodyInit válido y evita SharedArrayBuffer en types
+const blob = new Blob([buffer], {
+  type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+});
+
+return new NextResponse(blob, {
   status: 200,
   headers: {
-    "Content-Type":
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "Content-Disposition": `attachment; filename="${filename}.docx"`,
   },
 });
 
-  } catch (err: any) {
+ } catch (err: any) {
     console.error("DOCX route error:", err);
 
     // Errores “predecibles” para Vercel/runtime
