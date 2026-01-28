@@ -400,16 +400,18 @@ export async function POST(req: Request) {
       sections: [{ properties: {}, children }],
     });
 
-    const buffer = await Packer.toBuffer(doc);
+const buffer = await Packer.toBuffer(doc);
+const body = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
 
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${filename}.docx"`,
-      },
-    });
+return new NextResponse(body, {
+  status: 200,
+  headers: {
+    "Content-Type":
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "Content-Disposition": `attachment; filename="${filename}.docx"`,
+  },
+});
+
   } catch (err: any) {
     console.error("DOCX route error:", err);
 
