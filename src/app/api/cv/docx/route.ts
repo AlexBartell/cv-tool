@@ -133,7 +133,7 @@ function normalizeContactLines(lines: string[]) {
   return out;
 }
 
-function headingParagraph(text: string, level: HeadingLevel) {
+function headingParagraph(text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) {
   // Forzamos color negro para evitar tema (azul) en headings
   return new Paragraph({
     heading: level,
