@@ -19,7 +19,13 @@ function parseDataUrlToBuffer(dataUrl: string) {
   if (!match) return null;
   return Buffer.from(match[2], "base64");
 }
-
+function parseDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:(.+);base64,(.*)$/);
+  if (!match) return null;
+  const mime = match[1]; // "image/jpeg" | "image/png" | ...
+  const buf = Buffer.from(match[2], "base64");
+  return { mime, buf };
+}
 function stripBoldMarkers(s: string) {
   return s.replace(/\*\*/g, "");
 }
@@ -270,9 +276,10 @@ function buildHeaderWithPhoto(name: string, contactLines: string[], photoBuf: Bu
       alignment: AlignmentType.RIGHT,
       children: [
         new ImageRun({
-          data: photoBuf,
-          transformation: { width: 110, height: 110 },
-        }),
+  data: photoBuf,
+  type: photoType, // ✅ fuerza imagen raster (no svg)
+  transformation: { width: 110, height: 110 },
+}),
       ],
     }),
   ];
@@ -317,7 +324,13 @@ export async function POST(req: Request) {
     // 2) elimina el # Nombre del cuerpo para evitar duplicación
     const bodyNoName = removeTopNameHeading(bodyMarkdown);
 
-    const photoBuf = photoDataUrl ? parseDataUrlToBuffer(photoDataUrl) : null;
+    const parsed = photoDataUrl ? parseDataUrl(photoDataUrl) : null;
+const photoBuf = parsed?.buf ?? null;
+const photoType =
+  parsed?.mime?.includes("png") ? "png" :
+  parsed?.mime?.includes("webp") ? "jpg" : // docx no siempre soporta webp directo
+  "jpg";
+
 
     const children: any[] = [];
 
