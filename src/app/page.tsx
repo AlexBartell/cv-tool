@@ -263,6 +263,7 @@ useEffect(() => {
             <div className="mt-5 space-y-3">
               <Link
                 href="/create"
+ onClick={() => gaEvent("click_create_cv")}
                 className="block w-full rounded-2xl bg-black px-4 py-3 text-center text-sm font-semibold text-white hover:bg-gray-800"
               >
                 Crear CV desde cero
@@ -270,6 +271,7 @@ useEffect(() => {
 
               <Link
                 href="/tool"
+onClick={() => gaEvent("click_improve_cv")}
                 className="block w-full rounded-2xl border px-4 py-3 text-center text-sm font-semibold text-gray-900 hover:bg-gray-50"
               >
                 Mejorar mi CV actual
