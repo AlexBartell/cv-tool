@@ -1,4 +1,7 @@
+'use client';
 import Link from "next/link";
+import { gaEvent } from "@/lib/ga";
+import { useEffect } from "react";
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
@@ -77,6 +80,9 @@ function MiniExample({
 }
 
 export default function HomePage() {
+useEffect(() => {
+  gaEvent("view_home");
+}, []);
   return (
     <main className="mx-auto max-w-6xl px-6 pb-28 pt-10">
       {/* Hero */}
