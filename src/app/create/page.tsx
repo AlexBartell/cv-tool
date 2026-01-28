@@ -100,6 +100,7 @@ async function onSubmitUnlock(code: string) {
   setUnlockBusy(true);
   setUnlockError(null);
   const res = await verifyAndUnlock(code);
+gaEvent("unlock_completed", { tool: "create" });
   setUnlockBusy(false);
 
   if (!res.ok) {

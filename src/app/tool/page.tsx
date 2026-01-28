@@ -57,9 +57,8 @@ function requireUnlock(action: () => void) {
 async function onSubmitUnlock(code: string) {
   setUnlockBusy(true);
   setUnlockError(null);
-
   const res = await verifyAndUnlock(code);
-
+   gaEvent("unlock_completed", { tool: "improve" });
   setUnlockBusy(false);
 
   if (!res.ok) {
