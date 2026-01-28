@@ -3,7 +3,8 @@
 import React, { useMemo, useRef, useState } from "react";
 import UnlockModal from "@/components/UnlockModal";
 import { useUnlock } from "@/lib/useUnlock";
-
+import { useEffect } from "react";
+import { gaEvent } from "@/lib/ga";
 
 type Country = "MX" | "UY" | "US" | "CO" | "AR" | "CL";
 
@@ -29,7 +30,9 @@ const [atsDetails, setAtsDetails] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [result, setResult] = useState("");
-
+  useEffect(() => {
+    gaEvent("start_tool", { tool: "improve" });
+  }, []);
   // Foto
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [includePhoto, setIncludePhoto] = useState(true);

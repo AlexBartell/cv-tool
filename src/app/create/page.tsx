@@ -3,6 +3,7 @@ import UnlockModal from "@/components/UnlockModal";
 import { useUnlock } from "@/lib/useUnlock";
 import React, { useMemo, useState } from "react";
 import { useEffect } from "react";
+import { gaEvent } from "@/lib/ga";
 
 type Country = "MX" | "CO" | "US";
 type LangLevel = "Basico" | "Intermedio" | "Avanzado" | "Nativo";
@@ -107,7 +108,9 @@ async function onSubmitUnlock(code: string) {
   }
   setUnlockOpen(false);
 }
-
+useEffect(() => {
+  gaEvent("start_tool", { tool: "create" });
+}, []);
 useEffect(() => {
   if (country === "US") setIncludePhoto(false);
 }, [country]);
