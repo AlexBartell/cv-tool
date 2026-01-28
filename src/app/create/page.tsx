@@ -945,7 +945,10 @@ body: JSON.stringify({
           <button
             className="rounded-xl border px-4 py-3 hover:bg-gray-50 disabled:opacity-50"
             disabled={busy}
-            onClick={() => requireUnlock(downloadPdf)}
+           onClick={() => {
+  gaEvent("download_pdf", { tool: "create" });
+  requireUnlock(downloadPdf);
+}}
             type="button"
           >
             Descargar PDF
@@ -953,7 +956,10 @@ body: JSON.stringify({
           <button
             className="rounded-xl border px-4 py-3 hover:bg-gray-50 disabled:opacity-50"
             disabled={busy}
-            onClick={() => requireUnlock(downloadDocx)}
+            onClick={() => {
+  gaEvent("download_docx", { tool: "create" });
+  requireUnlock(downloadDocx);
+}}
             type="button"
           >
             Descargar Word

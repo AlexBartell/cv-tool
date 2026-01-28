@@ -371,7 +371,10 @@ async function downloadPdf() {
             </button>
 
             <button
-              onClick={() => requireUnlock(downloadDocx)}
+              onClick={() => {
+  gaEvent("download_docx", { tool: "improve" });
+  requireUnlock(downloadDocx);
+}}
               disabled={!result}
               className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -379,7 +382,10 @@ async function downloadPdf() {
             </button>
 
             <button
-              onClick={() => requireUnlock(downloadPdf)}
+              onClick={() => {
+  gaEvent("download_pdf", { tool: "improve" });
+  requireUnlock(downloadPdf);
+}}
               disabled={!result}
               className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
             >
