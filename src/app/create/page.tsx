@@ -96,17 +96,9 @@ function requireUnlock(action: () => void) {
   setUnlockOpen(true);
 }
 
-async function onSubmitUnlock(code: string) {
-  setUnlockBusy(true);
+function onUnlocked() {
+  gaEvent("unlock_completed", { tool: "create" });
   setUnlockError(null);
-  const res = await verifyAndUnlock(code);
-gaEvent("unlock_completed", { tool: "create" });
-  setUnlockBusy(false);
-
-  if (!res.ok) {
-    setUnlockError("invalid");
-    return;
-  }
   setUnlockOpen(false);
 }
 useEffect(() => {
@@ -1012,11 +1004,12 @@ body: JSON.stringify({
 <UnlockModal
   open={unlockOpen}
   onClose={() => setUnlockOpen(false)}
-  onSubmit={onSubmitUnlock}
+  onUnlocked={() => {
+    gaEvent("unlock_completed", { tool: "create" }); // en /tool poné tool: "tool"
+    setUnlockOpen(false);
+  }}
   loading={unlockBusy}
-  error={unlockError}
 />
-
 </main>
 );
 }

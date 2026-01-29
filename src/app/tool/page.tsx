@@ -405,9 +405,11 @@ async function downloadPdf() {
 <UnlockModal
   open={unlockOpen}
   onClose={() => setUnlockOpen(false)}
-  onSubmit={onSubmitUnlock}
+  onUnlocked={() => {
+    gaEvent("unlock_completed", { tool: "improve cv" }); // en /tool poné tool: "tool"
+    setUnlockOpen(false);
+  }}
   loading={unlockBusy}
-  error={unlockError}
 />
 
     </main>
