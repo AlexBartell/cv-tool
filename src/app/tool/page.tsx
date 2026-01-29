@@ -98,9 +98,17 @@ async function getAtsScore(md: string) {
     }
   }
 
-  async function improveCV() {
+async function improveCV() {
   setLoading(true);
   setResult("");
+
+  const trackingId =
+    localStorage.getItem("cpa_tracking_id_v1") ??
+    (() => {
+      const id = crypto.randomUUID();
+      localStorage.setItem("cpa_tracking_id_v1", id);
+      return id;
+    })();
 
   const res = await fetch("/api/cv/improve", {
     method: "POST",
@@ -111,14 +119,15 @@ async function getAtsScore(md: string) {
       country,
       email: email.trim() || null,
       linkedin: linkedin.trim() || null,
+      trackingId,
     }),
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   setLoading(false);
 
-  if (!data.ok) {
-    setResult(`Error: ${data.error || "unknown"}`);
+  if (!data?.ok) {
+    setResult(`Error: ${data?.error || "unknown"}`);
     return;
   }
 
@@ -127,6 +136,7 @@ async function getAtsScore(md: string) {
   // opcional: score ATS
   getAtsScore(data.cv);
 }
+
 
 
   async function downloadDocx() {
@@ -393,7 +403,7 @@ async function downloadPdf() {
   onUnlocked={() => {
     setUnlockedTrue();      // 🔥 esto es lo que faltaba
     setUnlockOpen(false);
-    gaEvent("unlock_completed", { tool: "tool" }); // o "create"
+    gaEvent("unlock_completed", { tool: "improve" }); // o "create"
   }}
 />
 
