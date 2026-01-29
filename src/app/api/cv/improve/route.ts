@@ -1,23 +1,91 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { headers } from "next/headers";
+import { redis } from "@/lib/redis";
+
+export const runtime = "nodejs";
+
+// --- Guardrails ---
+const MAX_BODY_CHARS = 80_000;      // JSON total (aprox)
+const MAX_CVTEXT_CHARS = 20_000;    // CV pegado
+const MAX_TARGET_ROLE = 120;
+
+const RL_LIMIT = 3;
+const RL_TTL_SECONDS = 60 * 60 * 24;
+
+async function getIP() {
+  const h = await headers();
+  const xff = h.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  return h.get("x-real-ip") || "unknown";
+}
+
+// ✅ Atomic rate limit: INCR + set EXPIRE only on first hit
+async function rateLimitAtomic(key: string) {
+  const lua = `
+    local v = redis.call("INCR", KEYS[1])
+    if v == 1 then
+      redis.call("EXPIRE", KEYS[1], ARGV[1])
+    end
+    return v
+  `;
+  const n = await redis.eval(lua, 1, key, String(RL_TTL_SECONDS));
+  return typeof n === "number" ? n : Number(n);
+}
 
 export async function POST(req: Request) {
   try {
-    const { cvText, targetRole, country = "MX", email, linkedin } = await req.json();
+    const raw = await req.text();
+    if (raw.length > MAX_BODY_CHARS) {
+      return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
+    }
+
+    const body = JSON.parse(raw);
+
+    const cvText = typeof body?.cvText === "string" ? body.cvText : "";
+    const targetRole = typeof body?.targetRole === "string" ? body.targetRole : "";
+    const country = typeof body?.country === "string" ? body.country : "MX";
+    // email/linkedin los aceptamos pero no los usamos en prompt hoy (si querés los integramos luego)
+    const email = typeof body?.email === "string" ? body.email : null;
+    const linkedin = typeof body?.linkedin === "string" ? body.linkedin : null;
+
+    const trackingId =
+      typeof body?.trackingId === "string" && body.trackingId.trim()
+        ? body.trackingId.trim()
+        : null;
 
     if (!cvText || !targetRole) {
-      return NextResponse.json(
-        { ok: false, error: "missing_fields" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "missing_fields" }, { status: 400 });
+    }
+
+    if (targetRole.length > MAX_TARGET_ROLE) {
+      return NextResponse.json({ ok: false, error: "target_role_too_long" }, { status: 400 });
+    }
+
+    if (cvText.length > MAX_CVTEXT_CHARS) {
+      return NextResponse.json({ ok: false, error: "cv_too_long" }, { status: 413 });
+    }
+
+    // 3) Rate limit por IP + trackingId (atomic)
+    const ip = await getIP();
+
+    const ipKey = `rl:cv_improve:ip:${ip}`;
+    const nIp = await rateLimitAtomic(ipKey);
+    if (nIp > RL_LIMIT) {
+      return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+    }
+
+    if (trackingId) {
+      const tidKey = `rl:cv_improve:tid:${trackingId}`;
+      const nTid = await rateLimitAtomic(tidKey);
+      if (nTid > RL_LIMIT) {
+        return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+      }
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { ok: false, error: "missing_openai_key" },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: "missing_openai_key" }, { status: 500 });
     }
 
     const client = new OpenAI({ apiKey });
@@ -42,12 +110,10 @@ Reglas inviolables:
 - SI un dato personal o de contacto aparece en el CV original (teléfono, email, LinkedIn),
   puedes conservarlo exactamente como está.
 - Puedes eliminar información irrelevante o perjudicial.
-- Puedes modificar la dirección tal que maximicé chances de exito. Si es demasiado largo e incluyé datos no necesarios podes modificarla. Quizas consideras que solo es necesaria ciudad y pais, entonces podes eliminar calle, etc. Hacelo segun tu opinion experta!
+- Puedes modificar la dirección para maximizar chances de éxito. Si es demasiado largo e incluye datos no necesarios, puedes acortarla (ej: solo ciudad y país).
 - Puedes reescribir para claridad, impacto y ATS.
 - Salida: SOLO el CV final en Markdown (sin tablas, sin columnas, sin emojis).
-`;
-
-
+`.trim();
 
     const userPrompt = `
 País objetivo: ${country}
@@ -58,9 +124,8 @@ ${cvText}
 
 Instrucciones (seguir estrictamente):
 
-1) Adaptación al país (México):
-- No uses "C.I." ni documentos de otros países.
-- Usa español neutro (México) y terminología de RRHH/ATS.
+1) Adaptación al país:
+- Usa español neutro y terminología de RRHH/ATS.
 
 2) Depuración:
 - Elimina información irrelevante, repetitiva o que reste profesionalismo.
@@ -70,48 +135,45 @@ Instrucciones (seguir estrictamente):
 - No inventes fechas. Si no existen, omítelas.
 - Formato por rol:
   - Puesto — Empresa | (Fechas solo si existen)
-    - Acción concreta + contexto del trabajo + impacto cualitativo (sin inventar métricas).
-- Si no hay métricas en el CV original, describe impacto de forma cualitativa
-  (ej: “mejorando la organización del área”, “asegurando continuidad operativa”).
+    - Acción concreta + contexto + impacto cualitativo (sin inventar métricas).
 - Evita listar tareas sin contexto.
-- Prioriza logros o responsabilidades que se relacionen con el puesto objetivo.
-
+- Prioriza logros/responsabilidades que se relacionen con el puesto objetivo.
 
 4) ATS:
 - Usa keywords naturales del puesto objetivo (sin stuffing).
 - Verbos de acción y logros claros.
 - Prioriza legibilidad humana además de compatibilidad ATS.
 
-
 SALIDA FINAL (OBLIGATORIA):
 - Devuelve SOLO Markdown.
 - Debes usar headings con "# " y "## " exactamente.
-- Viñetas SOLO con "- " (guion + espacio). No uses "•".
-- NO uses placeholders entre corchetes. El CV debe quedar listo para enviar.
+- Viñetas SOLO con "- ".
+- NO uses tablas ni columnas.
+- NO uses placeholders entre corchetes.
 
-Estructura obligatoria (usa exactamente estos encabezados):
+Estructura obligatoria:
 # Nombre y Apellido
 ## Datos de contacto
 ## Resumen profesional
 ## Competencias clave
-## Experiencia laboral 
+## Experiencia laboral
 ## Educación (si no proporciona excluir)
-## Cursos / Certificaciones(si no proporciona excluir)
-## Idiomas(si no proporciona excluir)
-## Herramientas / Tecnologías(si no proporciona excluir)
-## Información adicional(si no proporciona excluir)
-no puede decir en ningun lugar no proporciona o no da informacion!
+## Cursos / Certificaciones (si no proporciona excluir)
+## Idiomas (si no proporciona excluir)
+## Herramientas / Tecnologías (si no proporciona excluir)
+## Información adicional (si no proporciona excluir)
+No puede decir en ningún lugar “no proporciona” o “no da información”.
+
 Longitud:
 - 1 página si junior/administrativo, máximo 2 si se justifica.
-`;
-
+`.trim();
 
     const response = await client.chat.completions.create({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
       temperature: 0.4,
       messages: [
-        { role: "system", content: systemPrompt.trim() },
-        { role: "user", content: userPrompt.trim() },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
     });
 
@@ -125,4 +187,3 @@ Longitud:
     );
   }
 }
-
