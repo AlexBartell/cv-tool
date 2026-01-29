@@ -9,10 +9,10 @@ export const runtime = "nodejs";
 // --- Guardrails (ajustables) ---
 const MAX_BODY_CHARS = 60_000;      // tamaño total del JSON recibido (aprox)
 const MAX_TARGET_ROLE = 120;        // rol objetivo
-const MAX_FIELD_CHARS = 12_000;     // límite para campos largos (summary, bullets concatenados, etc.)
+const MAX_FIELD_CHARS = 18_000;     // ✅ subido (cap total texto "caro")
 
-const RL_LIMIT = 3;                // 3 generaciones
-const RL_TTL_SECONDS = 60 * 60 * 24; // por 24h
+const RL_LIMIT = 3;                 // 3 generaciones total (create+improve)
+const RL_TTL_SECONDS = 60 * 60 * 24; // 24h
 
 async function getIP() {
   const h = await headers();
@@ -26,7 +26,6 @@ function safeLen(v: unknown) {
 }
 
 function sumTextSize(input: any) {
-  // Sumamos texto “caro” en tokens. No perfecto, pero efectivo.
   let total = 0;
 
   total += safeLen(input?.targetRole);
@@ -82,11 +81,17 @@ function sumTextSize(input: any) {
   return total;
 }
 
-async function incrWithTTL(key: string) {
-  // ioredis: incr + expire (solo si es primera vez)
-  const n = await redis.incr(key);
-  if (n === 1) await redis.expire(key, RL_TTL_SECONDS);
-  return n;
+// ✅ Atomic rate limit: INCR + EXPIRE (solo primera vez)
+async function rateLimitAtomic(key: string) {
+  const lua = `
+    local v = redis.call("INCR", KEYS[1])
+    if v == 1 then
+      redis.call("EXPIRE", KEYS[1], ARGV[1])
+    end
+    return v
+  `;
+  const n = await redis.eval(lua, 1, key, String(RL_TTL_SECONDS));
+  return typeof n === "number" ? n : Number(n);
 }
 
 export async function POST(req: Request) {
@@ -94,10 +99,7 @@ export async function POST(req: Request) {
     // 1) Leer raw text para limitar tamaño ANTES de parsear
     const raw = await req.text();
     if (raw.length > MAX_BODY_CHARS) {
-      return NextResponse.json(
-        { ok: false, error: "payload_too_large" },
-        { status: 413 }
-      );
+      return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
     }
 
     const body = JSON.parse(raw);
@@ -112,25 +114,20 @@ export async function POST(req: Request) {
     const bodyForSchema = { ...body };
     delete (bodyForSchema as any).trackingId;
 
-    // 2) Rate limit por IP + trackingId (si existe)
+    // 2) Rate limit GLOBAL por IP + trackingId (create+improve comparten keys)
     const ip = await getIP();
-    const ipKey = `rl:cv_create:ip:${ip}`;
-    const nIp = await incrWithTTL(ipKey);
+
+    const ipKey = `rl:cv_gen:ip:${ip}`;
+    const nIp = await rateLimitAtomic(ipKey);
     if (nIp > RL_LIMIT) {
-      return NextResponse.json(
-        { ok: false, error: "rate_limited" },
-        { status: 429 }
-      );
+      return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
     }
 
     if (trackingId) {
-      const tidKey = `rl:cv_create:tid:${trackingId}`;
-      const nTid = await incrWithTTL(tidKey);
+      const tidKey = `rl:cv_gen:tid:${trackingId}`;
+      const nTid = await rateLimitAtomic(tidKey);
       if (nTid > RL_LIMIT) {
-        return NextResponse.json(
-          { ok: false, error: "rate_limited" },
-          { status: 429 }
-        );
+        return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
       }
     }
 
@@ -139,35 +136,23 @@ export async function POST(req: Request) {
 
     // 4) Límites de longitud por campos “caros”
     if (input.targetRole?.length > MAX_TARGET_ROLE) {
-      return NextResponse.json(
-        { ok: false, error: "target_role_too_long" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "target_role_too_long" }, { status: 400 });
     }
 
     const totalText = sumTextSize(input);
     if (totalText > MAX_FIELD_CHARS) {
-      return NextResponse.json(
-        { ok: false, error: "text_too_long" },
-        { status: 413 }
-      );
+      return NextResponse.json({ ok: false, error: "text_too_long" }, { status: 413 });
     }
 
     const { targetRole, country = "MX" } = input;
 
     if (!targetRole) {
-      return NextResponse.json(
-        { ok: false, error: "missing_fields" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "missing_fields" }, { status: 400 });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { ok: false, error: "missing_openai_key" },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: "missing_openai_key" }, { status: 500 });
     }
 
     const client = new OpenAI({ apiKey });
@@ -202,6 +187,7 @@ Reglas inviolables:
 - NUNCA escribas frases como "(No se proporcionó información...)".
 `.trim();
 
+    // Bloque estructurado para el modelo (sin foto; foto se inyecta en PDF/DOCX después)
     const candidateBlock = `
 DATOS DEL CANDIDATO:
 Nombre: ${input.profile.fullName}
