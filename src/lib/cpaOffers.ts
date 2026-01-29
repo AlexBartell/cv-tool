@@ -1,46 +1,26 @@
-// /lib/cpaOffers.ts
 import type { DeviceOS } from "./device";
 
 export type Offer = {
-  id: string;              // tu id interno
-  network: "cpagrip";
+  id: string;
   name: string;
-  url: string;             // tu smartlink o enlace de oferta
-  allowed: DeviceOS[];     // plataformas compatibles
-  weight?: number;         // para rotación
+  url: string;
+  allowed: DeviceOS[];
+  weight?: number;
 };
 
 export const OFFERS: Offer[] = [
   {
-    id: "and_1",
-    network: "cpagrip",
-    name: "Android Offer A",
-    url: "https://TU_LINK_ANDROID",
-    allowed: ["android"],
-    weight: 3,
-  },
-  {
-    id: "ios_1",
-    network: "cpagrip",
-    name: "iOS Offer A",
-    url: "https://TU_LINK_IOS",
-    allowed: ["ios"],
-    weight: 3,
-  },
-  {
-    id: "desk_1",
-    network: "cpagrip",
-    name: "Desktop Offer A",
-    url: "https://TU_LINK_DESKTOP",
-    allowed: ["desktop"],
-    weight: 2,
-  },
-  {
-    id: "desk_ios_1",
-    network: "cpagrip",
-    name: "Desktop + iOS Offer",
-    url: "https://TU_LINK_DESKTOP_IOS",
+    id: "mx_desktop_ios_69536",
+    name: "MX Desktop + iOS",
+    url: "https://singingfiles.com/show.php?l=0&u=2493983&id=69536",
     allowed: ["desktop", "ios"],
-    weight: 1,
+    weight: 10,
+  },
+  {
+    id: "mx_android_66422",
+    name: "MX Android",
+    url: "https://singingfiles.com/show.php?l=0&u=2493983&id=66422",
+    allowed: ["android"],
+    weight: 10,
   },
 ];

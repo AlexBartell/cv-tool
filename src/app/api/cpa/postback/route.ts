@@ -18,8 +18,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "bad password" }, { status: 403 });
   }
 
+  // unlock 48h
   await redis.set(`cpa:unlock:${tracking_id}`, "1", "EX", 60 * 60 * 48);
 
+  // metadata opcional
   if (offer_id) await redis.set(`cpa:meta:${tracking_id}:offer_id`, offer_id, "EX", 60 * 60 * 48);
   if (payout) await redis.set(`cpa:meta:${tracking_id}:payout`, payout, "EX", 60 * 60 * 48);
 

@@ -4,123 +4,79 @@ import React, { useEffect, useMemo, useState } from "react";
 import { detectOS, type DeviceOS } from "@/lib/device";
 import { pickOffer } from "@/lib/pickOffer";
 
-// Tracking opcional: si tu /lib/ga.ts exporta algo distinto, lo adaptás fácil
-import { track } from "@/lib/ga";
-
-type Props = {
+export default function UnlockModal({
+  open,
+  onClose,
+  onUnlocked,
+  loading,
+}: {
   open: boolean;
   onClose: () => void;
-  onUnlocked: () => void; // reemplaza onSubmit(code)
-};
-
-const LS_KEY = "cpa_unlock_state_v1";
-
-type Stored = {
-  subid: string;
-  offerId: string;
-  os: DeviceOS;
-  createdAt: number;
-};
-
-function getOrCreateSubid(): string {
-  // crypto.randomUUID() existe en browsers modernos
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  // fallback
-  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-export default function UnlockModal({ open, onClose, onUnlocked }: Props) {
+  onUnlocked: () => void;
+  loading?: boolean;
+}) {
   const [os, setOs] = useState<DeviceOS>("unknown");
   const [checking, setChecking] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const LS_KEY = "cpa_tracking_id_v1";
+
   useEffect(() => {
     if (!open) return;
     setOs(detectOS());
+    setMsg(null);
   }, [open]);
 
   const offer = useMemo(() => (os === "unknown" ? null : pickOffer(os)), [os]);
 
-  // Cargar/crear estado persistido
-  const stored: Stored | null = useMemo(() => {
+  const trackingId = useMemo(() => {
     if (typeof window === "undefined") return null;
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw) as Stored;
-    } catch {
-      return null;
-    }
+
+    const existing = localStorage.getItem(LS_KEY);
+    if (existing) return existing;
+
+    const fresh =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+    localStorage.setItem(LS_KEY, fresh);
+    return fresh;
   }, [open]);
 
-  // Crear y guardar subid al abrir (si no existe)
-  useEffect(() => {
-    if (!open) return;
-    if (typeof window === "undefined") return;
-
-    const existing = (() => {
-      try {
-        const raw = localStorage.getItem(LS_KEY);
-        return raw ? (JSON.parse(raw) as Stored) : null;
-      } catch {
-        return null;
-      }
-    })();
-
-    if (!existing && offer) {
-      const fresh: Stored = {
-        subid: getOrCreateSubid(),
-        offerId: offer.id,
-        os,
-        createdAt: Date.now(),
-      };
-      localStorage.setItem(LS_KEY, JSON.stringify(fresh));
-    }
-  }, [open, offer, os]);
-
-  useEffect(() => {
-    if (open && offer) track?.("offer_impression", { os, offerId: offer.id });
-  }, [open, offer, os]);
-
-  if (!open) return null;
-
-  const current = stored ?? (offer
-    ? { subid: getOrCreateSubid(), offerId: offer.id, os, createdAt: Date.now() }
-    : null);
-
-  const offerUrl = (() => {
-    if (!offer || !current) return null;
-    // IMPORTANTE: CPAGrip suele aceptar subid/sub_id/clickid según setup.
-    // Elegí 1 y mantenelo igual en el postback.
+  const offerUrl = useMemo(() => {
+    if (!offer || !trackingId) return null;
     const u = new URL(offer.url);
-    u.searchParams.set("subid", current.subid);
+    u.searchParams.set("tracking_id", trackingId);
+    // opcional debug
     u.searchParams.set("oid", offer.id);
     u.searchParams.set("os", os);
     return u.toString();
-  })();
+  }, [offer, trackingId, os]);
 
   async function verify() {
-    if (!current?.subid) return;
+    if (!trackingId) return;
     setChecking(true);
     setMsg(null);
     try {
-      const res = await fetch(`/api/cpa/status?subid=${encodeURIComponent(current.subid)}`, {
+      const res = await fetch(`/api/cpa/status?tracking_id=${encodeURIComponent(trackingId)}`, {
         method: "GET",
         cache: "no-store",
       });
       const data = await res.json().catch(() => null);
 
       if (!res.ok || !data) {
-        setMsg("No pude verificar ahora. Intenta de nuevo en 30 segundos.");
+        setMsg("No pude verificar ahora. Reintenta en unos segundos.");
         return;
       }
 
       if (data.unlocked) {
-        track?.("offer_verified", { os, offerId: current.offerId });
+        // guardá un flag para no pedirlo de nuevo si querés
+        localStorage.setItem("cpa_unlocked_v1", "1");
         onUnlocked();
         onClose();
       } else {
-        setMsg("Aún no aparece como completada. Si recién terminaste, espera 1–2 minutos y vuelve a verificar.");
+        setMsg("Aún no figura completada. Si recién terminaste, espera 1–2 minutos y vuelve a verificar.");
       }
     } catch {
       setMsg("Error de conexión verificando. Reintenta.");
@@ -128,6 +84,8 @@ export default function UnlockModal({ open, onClose, onUnlocked }: Props) {
       setChecking(false);
     }
   }
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -137,7 +95,7 @@ export default function UnlockModal({ open, onClose, onUnlocked }: Props) {
           <div>
             <h3 className="text-lg font-semibold">Desbloquear</h3>
             <p className="mt-1 text-sm text-gray-600">
-              Completa una oferta gratuita (sin tarjeta). Luego toca “Verificar”.
+              Completa una oferta gratuita (sin tarjeta) y luego toca “Verificar”.
             </p>
           </div>
           <button
@@ -154,12 +112,11 @@ export default function UnlockModal({ open, onClose, onUnlocked }: Props) {
             Dispositivo detectado: <span className="font-medium">{os}</span>
           </p>
 
-          {offer && offerUrl ? (
+          {offerUrl ? (
             <a
               href={offerUrl}
               target="_blank"
               rel="noreferrer"
-              onClick={() => track?.("offer_click", { os, offerId: offer.id })}
               className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-gray-800"
             >
               Completar oferta gratuita
@@ -173,7 +130,7 @@ export default function UnlockModal({ open, onClose, onUnlocked }: Props) {
           <button
             className="mt-3 w-full rounded-xl border px-4 py-3 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
             onClick={verify}
-            disabled={checking || !current?.subid}
+            disabled={checking || loading || !trackingId}
             type="button"
           >
             {checking ? "Verificando..." : "Ya la completé / Verificar"}
@@ -183,12 +140,7 @@ export default function UnlockModal({ open, onClose, onUnlocked }: Props) {
         </div>
 
         <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-          Esta herramienta se mantiene con una <span className="font-medium">oferta gratuita</span> para
-          cubrir costos de operación de la IA y verificar que no eres un robot. No pedimos tarjeta.
-        </p>
-
-        <p className="mt-2 text-[11px] text-gray-400">
-          Tip: si estás en iPhone, probá Safari. En Android, Chrome.
+          Esta herramienta se mantiene con una <span className="font-medium">oferta gratuita</span> para cubrir costos.
         </p>
       </div>
     </div>
