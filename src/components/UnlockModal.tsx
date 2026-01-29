@@ -86,8 +86,10 @@ export default function UnlockModal({
 
       if (data.unlocked) {
   localStorage.setItem("cvtool_unlocked_v1", "true");
-  onUnlocked?.();
+  // ✅ esto fuerza update instantáneo en React
+  window.dispatchEvent(new Event("cvtool:unlocked"));
   onClose();
+  return;
 }
  else {
         setMsg("Aún no figura completada. Si recién terminaste, espera 1–2 minutos y vuelve a verificar.");

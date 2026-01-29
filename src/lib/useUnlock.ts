@@ -30,6 +30,27 @@ export function useUnlock() {
   useEffect(() => {
     setUnlocked(localStorage.getItem(KEY) === "true");
   }, []);
+// de aqui debugger
+useEffect(() => {
+  function refresh() {
+    setUnlocked(localStorage.getItem(KEY) === "true");
+  }
+
+  // ✅ evento custom (misma pestaña)
+  window.addEventListener("cvtool:unlocked", refresh);
+
+  // ✅ si cambia en otra pestaña
+  window.addEventListener("storage", (e) => {
+    if (e.key === KEY) refresh();
+  });
+
+  return () => {
+    window.removeEventListener("cvtool:unlocked", refresh);
+    window.removeEventListener("storage", refresh as any);
+  };
+}, []);
+
+// aqui termina ddebugger por no verificacion 
 
   // ✅ NUEVO: para actualizar React al instante (sin refresh)
   function setUnlockedTrue() {
@@ -80,3 +101,5 @@ export function useUnlock() {
     lock,
   };
 }
+
+
