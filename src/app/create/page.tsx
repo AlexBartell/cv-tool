@@ -252,13 +252,14 @@ useEffect(() => {
   })();
 
 
-      const createRes = await fetch("/api/cv/create", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-  ...payload,
-  trackingId,
-})
+     const createRes = await fetch("/api/cv/create", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    ...payload,
+    trackingId,
+  }),
+});
       const createJson = await createRes.json();
       if (!createJson.ok) throw new Error(createJson.error || "create_failed");
 
