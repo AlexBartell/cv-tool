@@ -54,25 +54,10 @@ function requireUnlock(action: () => void) {
   setUnlockOpen(true);
 }
 
-async function onSubmitUnlock(code: string) {
-  setUnlockBusy(true);
-  setUnlockError(null);
-  const res = await verifyAndUnlock(code);
-   gaEvent("unlock_completed", { tool: "improve" });
-  setUnlockBusy(false);
-
-  if (!res.ok) {
-    setUnlockError("invalid");
-    return;
-  }
-
+function onUnlocked() {
+  setUnlockedTrue();
+  gaEvent("unlock_completed", { tool: "improve" });
   setUnlockOpen(false);
-
-  if (pendingActionRef.current) {
-    const fn = pendingActionRef.current;
-    pendingActionRef.current = null;
-    fn();
-  }
 }
 
 async function getAtsScore(md: string) {
