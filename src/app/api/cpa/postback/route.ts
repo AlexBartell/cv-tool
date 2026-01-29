@@ -1,14 +1,27 @@
 import { NextResponse } from "next/server";
-import { CPA_UNLOCKS } from "../_store";
+import { redis } from "@/lib/redis";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const subid = searchParams.get("subid") || searchParams.get("sub_id") || searchParams.get("clickid");
+export async function POST(req: Request) {
+  const form = await req.formData().catch(() => null);
 
-  if (!subid) return NextResponse.json({ ok: false, error: "missing subid" }, { status: 400 });
+  const tracking_id = (form?.get("tracking_id")?.toString() ?? "").trim();
+  const offer_id = (form?.get("offer_id")?.toString() ?? "").trim();
+  const payout = (form?.get("payout")?.toString() ?? "").trim();
+  const password = (form?.get("password")?.toString() ?? "").trim();
 
-  // acá podrías validar un token/secret si CPAGrip te permite
-  CPA_UNLOCKS.add(subid);
+  if (!tracking_id) {
+    return NextResponse.json({ ok: false, error: "missing tracking_id" }, { status: 400 });
+  }
+
+  const expected = (process.env.CPAGRIP_POSTBACK_PASSWORD ?? "").trim();
+  if (expected && password !== expected) {
+    return NextResponse.json({ ok: false, error: "bad password" }, { status: 403 });
+  }
+
+  await redis.set(`cpa:unlock:${tracking_id}`, "1", "EX", 60 * 60 * 48);
+
+  if (offer_id) await redis.set(`cpa:meta:${tracking_id}:offer_id`, offer_id, "EX", 60 * 60 * 48);
+  if (payout) await redis.set(`cpa:meta:${tracking_id}:payout`, payout, "EX", 60 * 60 * 48);
 
   return NextResponse.json({ ok: true });
 }

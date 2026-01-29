@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { CPA_UNLOCKS } from "../_store";
+import { redis } from "@/lib/redis";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const subid = searchParams.get("subid");
+  const tracking_id = (searchParams.get("tracking_id") ?? "").trim();
 
-  if (!subid) return NextResponse.json({ unlocked: false }, { status: 200 });
-  return NextResponse.json({ unlocked: CPA_UNLOCKS.has(subid) }, { status: 200 });
+  if (!tracking_id) return NextResponse.json({ unlocked: false }, { status: 200 });
+
+  const val = await redis.get(`cpa:unlock:${tracking_id}`);
+  return NextResponse.json({ unlocked: val === "1" }, { status: 200 });
 }
