@@ -1,11 +1,157 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { CvCreateSchema } from "@/lib/schemas/cvCreateSchema";
+import { headers } from "next/headers";
+import { redis } from "@/lib/redis";
+
+export const runtime = "nodejs";
+
+// --- Guardrails (ajustables) ---
+const MAX_BODY_CHARS = 60_000;      // tamaño total del JSON recibido (aprox)
+const MAX_TARGET_ROLE = 120;        // rol objetivo
+const MAX_FIELD_CHARS = 12_000;     // límite para campos largos (summary, bullets concatenados, etc.)
+
+const RL_LIMIT = 3;                // 3 generaciones
+const RL_TTL_SECONDS = 60 * 60 * 24; // por 24h
+
+function getIP() {
+  const h = headers();
+  const xff = h.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  return h.get("x-real-ip") || "unknown";
+}
+
+function safeLen(v: unknown) {
+  return typeof v === "string" ? v.length : 0;
+}
+
+function sumTextSize(input: any) {
+  // Sumamos texto “caro” en tokens. No perfecto, pero efectivo.
+  let total = 0;
+
+  total += safeLen(input?.targetRole);
+  total += safeLen(input?.industry);
+  total += safeLen(input?.summary);
+
+  const prof = input?.profile ?? {};
+  total += safeLen(prof?.fullName);
+  total += safeLen(prof?.city);
+  total += safeLen(prof?.stateOrRegion);
+  total += safeLen(prof?.phoneWhatsapp);
+  total += safeLen(prof?.email);
+  total += safeLen(prof?.linkedin);
+  total += safeLen(prof?.website);
+
+  for (const e of input?.experience ?? []) {
+    total += safeLen(e?.title);
+    total += safeLen(e?.company);
+    total += safeLen(e?.location);
+    total += safeLen(e?.start);
+    total += safeLen(e?.end);
+    total += safeLen(e?.topAchievement);
+    for (const b of e?.bullets ?? []) total += safeLen(b);
+  }
+
+  for (const ed of input?.education ?? []) {
+    total += safeLen(ed?.level);
+    total += safeLen(ed?.school);
+    total += safeLen(ed?.degree);
+    total += safeLen(ed?.status);
+    total += safeLen(ed?.year);
+    total += safeLen(ed?.location);
+    for (const d of ed?.details ?? []) total += safeLen(d);
+  }
+
+  for (const c of input?.certifications ?? []) total += safeLen(c);
+
+  for (const p of input?.projects ?? []) {
+    total += safeLen(p?.name);
+    total += safeLen(p?.link);
+    for (const b of p?.bullets ?? []) total += safeLen(b);
+  }
+
+  for (const l of input?.languages ?? []) {
+    total += safeLen(l?.name);
+    total += safeLen(l?.level);
+  }
+
+  const skills = input?.skills ?? {};
+  for (const s of skills?.competencies ?? []) total += safeLen(s);
+  for (const t of skills?.toolsTech ?? []) total += safeLen(t);
+
+  return total;
+}
+
+async function incrWithTTL(key: string) {
+  // ioredis: incr + expire (solo si es primera vez)
+  const n = await redis.incr(key);
+  if (n === 1) await redis.expire(key, RL_TTL_SECONDS);
+  return n;
+}
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const input = CvCreateSchema.parse(body);
+    // 1) Leer raw text para limitar tamaño ANTES de parsear
+    const raw = await req.text();
+    if (raw.length > MAX_BODY_CHARS) {
+      return NextResponse.json(
+        { ok: false, error: "payload_too_large" },
+        { status: 413 }
+      );
+    }
+
+    const body = JSON.parse(raw);
+
+    // trackingId opcional (viene del frontend/localStorage)
+    const trackingId =
+      typeof body?.trackingId === "string" && body.trackingId.trim()
+        ? body.trackingId.trim()
+        : null;
+
+    // Si tu schema fuera strict, evitamos que falle:
+    const bodyForSchema = { ...body };
+    delete (bodyForSchema as any).trackingId;
+
+    // 2) Rate limit por IP + trackingId (si existe)
+    const ip = getIP();
+    const ipKey = `rl:cv_create:ip:${ip}`;
+    const nIp = await incrWithTTL(ipKey);
+    if (nIp > RL_LIMIT) {
+      return NextResponse.json(
+        { ok: false, error: "rate_limited" },
+        { status: 429 }
+      );
+    }
+
+    if (trackingId) {
+      const tidKey = `rl:cv_create:tid:${trackingId}`;
+      const nTid = await incrWithTTL(tidKey);
+      if (nTid > RL_LIMIT) {
+        return NextResponse.json(
+          { ok: false, error: "rate_limited" },
+          { status: 429 }
+        );
+      }
+    }
+
+    // 3) Validación de schema
+    const input = CvCreateSchema.parse(bodyForSchema);
+
+    // 4) Límites de longitud por campos “caros”
+    if (input.targetRole?.length > MAX_TARGET_ROLE) {
+      return NextResponse.json(
+        { ok: false, error: "target_role_too_long" },
+        { status: 400 }
+      );
+    }
+
+    const totalText = sumTextSize(input);
+    if (totalText > MAX_FIELD_CHARS) {
+      return NextResponse.json(
+        { ok: false, error: "text_too_long" },
+        { status: 413 }
+      );
+    }
 
     const { targetRole, country = "MX" } = input;
 
@@ -56,7 +202,6 @@ Reglas inviolables:
 - NUNCA escribas frases como "(No se proporcionó información...)".
 `.trim();
 
-    // Bloque estructurado para el modelo (sin foto; foto se inyecta en PDF/DOCX después)
     const candidateBlock = `
 DATOS DEL CANDIDATO:
 Nombre: ${input.profile.fullName}
