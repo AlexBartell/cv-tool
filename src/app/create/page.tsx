@@ -243,12 +243,22 @@ useEffect(() => {
         certifications: parseLines(certifications),
         // NO mandamos foto a create
       };
+     const trackingId =
+  localStorage.getItem("cpa_tracking_id_v1") ??
+  (() => {
+    const id = crypto.randomUUID();
+    localStorage.setItem("cpa_tracking_id_v1", id);
+    return id;
+  })();
+
 
       const createRes = await fetch("/api/cv/create", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+        body: JSON.stringify({
+  ...payload,
+  trackingId,
+})
       const createJson = await createRes.json();
       if (!createJson.ok) throw new Error(createJson.error || "create_failed");
 
