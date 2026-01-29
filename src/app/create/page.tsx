@@ -85,10 +85,11 @@ const [includePhoto, setIncludePhoto] = useState<boolean>(country !== "US");
   const [industry, setIndustry] = useState("");
 
   const [summary, setSummary] = useState("");
-const { unlocked, verifyAndUnlock } = useUnlock();
 const [unlockOpen, setUnlockOpen] = useState(false);
 const [unlockBusy, setUnlockBusy] = useState(false);
 const [unlockError, setUnlockError] = useState<string | null>(null);
+const { unlocked, setUnlockedTrue } = useUnlock();
+
 
 function requireUnlock(action: () => void) {
   if (unlocked) return action();
@@ -1005,11 +1006,12 @@ body: JSON.stringify({
   open={unlockOpen}
   onClose={() => setUnlockOpen(false)}
   onUnlocked={() => {
-    gaEvent("unlock_completed", { tool: "create" }); // en /tool poné tool: "tool"
+    setUnlockedTrue();      // 🔥 esto es lo que faltaba
     setUnlockOpen(false);
+    gaEvent("unlock_completed", { tool: "create" }); // o "create"
   }}
-  loading={unlockBusy}
 />
+
 </main>
 );
 }

@@ -40,7 +40,7 @@ const [atsDetails, setAtsDetails] = useState<any[] | null>(null);
   const canImprove = useMemo(() => {
     return !loading && !extracting && cvText.trim().length > 0 && targetRole.trim().length > 0;
   }, [loading, extracting, cvText, targetRole]);
-const { unlocked, verifyAndUnlock } = useUnlock();
+const { unlocked, setUnlockedTrue } = useUnlock();
 const pendingActionRef = useRef<null | (() => void)>(null);
 
 const [unlockOpen, setUnlockOpen] = useState(false);
@@ -406,10 +406,10 @@ async function downloadPdf() {
   open={unlockOpen}
   onClose={() => setUnlockOpen(false)}
   onUnlocked={() => {
-    gaEvent("unlock_completed", { tool: "improve cv" }); // en /tool poné tool: "tool"
+    setUnlockedTrue();      // 🔥 esto es lo que faltaba
     setUnlockOpen(false);
+    gaEvent("unlock_completed", { tool: "tool" }); // o "create"
   }}
-  loading={unlockBusy}
 />
 
     </main>

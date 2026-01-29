@@ -85,12 +85,11 @@ export default function UnlockModal({
       }
 
       if (data.unlocked) {
-  // FLAG FINAL que usa useUnlock()
   localStorage.setItem("cvtool_unlocked_v1", "true");
-
   onUnlocked?.();
   onClose();
-} else {
+}
+ else {
         setMsg("Aún no figura completada. Si recién terminaste, espera 1–2 minutos y vuelve a verificar.");
       }
     } catch {
