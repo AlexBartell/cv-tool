@@ -69,14 +69,14 @@ export async function POST(req: Request) {
     // 3) Rate limit por IP + trackingId (atomic)
     const ip = await getIP();
 
-    const ipKey = `rl:cv_improve:ip:${ip}`;
+    const ipKey = `rl:cv_gen:ip:${ip}`;
     const nIp = await rateLimitAtomic(ipKey);
     if (nIp > RL_LIMIT) {
       return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
     }
 
     if (trackingId) {
-      const tidKey = `rl:cv_improve:tid:${trackingId}`;
+      const tidKey = `rl:cv_gen:tid:${trackingId}`;
       const nTid = await rateLimitAtomic(tidKey);
       if (nTid > RL_LIMIT) {
         return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
