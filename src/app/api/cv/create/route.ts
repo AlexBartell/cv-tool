@@ -113,7 +113,7 @@ export async function POST(req: Request) {
     delete (bodyForSchema as any).trackingId;
 
     // 2) Rate limit por IP + trackingId (si existe)
-    const ip = getIP();
+    const ip = await getIP();
     const ipKey = `rl:cv_create:ip:${ip}`;
     const nIp = await incrWithTTL(ipKey);
     if (nIp > RL_LIMIT) {
