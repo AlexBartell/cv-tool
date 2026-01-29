@@ -14,8 +14,8 @@ const MAX_FIELD_CHARS = 12_000;     // límite para campos largos (summary, bull
 const RL_LIMIT = 3;                // 3 generaciones
 const RL_TTL_SECONDS = 60 * 60 * 24; // por 24h
 
-function getIP() {
-  const h = headers();
+async function getIP() {
+  const h = await headers();
   const xff = h.get("x-forwarded-for");
   if (xff) return xff.split(",")[0].trim();
   return h.get("x-real-ip") || "unknown";
