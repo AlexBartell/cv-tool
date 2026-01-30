@@ -1,6 +1,7 @@
 // src/app/page.tsx
 import Link from "next/link";
 import IntentPopup from "@/components/IntentPopup";
+import StickyCtaBar from "@/components/StickyCtaBar";
 
 // ... dentro del JSX, al final o al principio:
 
@@ -404,6 +405,7 @@ export default function HomePage() {
       <footer className="mt-12 border-t pt-6 text-xs text-neutral-500">
         © {new Date().getFullYear()} atscv.pro · Recursos para CV y postulación
       </footer>
+<StickyCtaBar delayMs={6000} dismissDays={10} />
 <IntentPopup delayMs={12000} dismissDays={10} />
     </main>
   );
