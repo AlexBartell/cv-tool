@@ -1,325 +1,410 @@
-'use client';
+// src/app/page.tsx
 import Link from "next/link";
-import { gaEvent } from "@/lib/ga";
-import { useEffect } from "react";
+import IntentPopup from "@/components/IntentPopup";
 
-function Badge({ children }: { children: React.ReactNode }) {
+// ... dentro del JSX, al final o al principio:
+
+
+type JobOffer = {
+  id: string;
+  title: string;
+  company?: string;
+  location: string;
+  schedule?: string;
+  modality?: string;
+  salary?: string;
+  requirements: string[];
+  benefits?: string[];
+  contactLabel: string; // "WhatsApp" / "Teléfono" / "Presencial"
+  contactValue: string; // "5512345678" / "Calle..." / "..."
+  note?: string;
+};
+
+const OFFERS_TODAY: JobOffer[] = [
+  {
+    id: "mx-001",
+    title: "Ayudante de comedor",
+    location: "CDMX",
+    schedule: "8:00 a.m. – 5:00 p.m. (descanso entre semana)",
+    requirements: [
+      "Experiencia en comedor industrial (6 meses+)",
+      "Conocimiento básico de seguridad e higiene",
+      "Atención al cliente interno",
+      "Escolaridad: secundaria",
+    ],
+    benefits: [
+      "Pago semanal",
+      "Prestaciones de ley desde el 1er día",
+      "Comedor y médico subsidiado",
+      "Caja de ahorro / crédito (opcionales)",
+    ],
+    contactLabel: "Teléfono / WhatsApp",
+    contactValue: "5648312126",
+    note: "Contratación inmediata",
+  },
+  {
+    id: "mx-002",
+    title: "Garrotero – Vips (Grupo Alsea)",
+    company: "Vips / Grupo Alsea",
+    location: "Álvaro Obregón, CDMX (Portal San Ángel)",
+    modality: "Turnos rolados",
+    requirements: [
+      "18+",
+      "Secundaria concluida",
+      "Disponibilidad para rolar turnos",
+      "Constancia de situación fiscal (indispensable)",
+    ],
+    benefits: [
+      "Sueldo base + propinas",
+      "Prestaciones superiores a ley",
+      "Vales de despensa",
+      "Comedor",
+      "Descuento en marcas Alsea",
+    ],
+    contactLabel: "Teléfono",
+    contactValue: "5514404486",
+    note: "Entrevistas presenciales (preguntar por Gerente Javier)",
+  },
+  {
+    id: "mx-003",
+    title: "Supervisor / Encargado de turno – Domino’s",
+    company: "Domino’s Pizza (Alsea)",
+    location: "Observatorio, CDMX",
+    modality: "Presencial · Tiempo completo",
+    salary: "$11,000 – $13,000 MXN/mes",
+    requirements: [
+      "20+",
+      "Bachillerato concluido (certificado)",
+      "6 meses como supervisor/encargado (restaurante/retail/cine)",
+      "Inventarios y manejo de equipos",
+    ],
+    benefits: ["Vales de despensa", "Prestaciones de ley y superiores", "Crecimiento"],
+    contactLabel: "Teléfono",
+    contactValue: "5662247230",
+  },
+  {
+    id: "mx-004",
+    title: "Administrador de proyecto – Fibra óptica (por proyecto)",
+    company: "Telecomunicaciones",
+    location: "San Jerónimo, CDMX",
+    modality: "Presencial",
+    schedule: "L–V 9:00 a 19:00 (2h comida)",
+    salary: "$28,000 – $30,000 MXN/mes",
+    requirements: [
+      "Control de insumos/servicios/entregas",
+      "Balances y proyecciones de gastos",
+      "Registro de bitácoras y seguimiento administrativo",
+    ],
+    benefits: ["Prestaciones de ley"],
+    contactLabel: "WhatsApp",
+    contactValue: "5576148239",
+    note: "Enviar CV actualizado",
+  },
+  {
+    id: "mx-005",
+    title: "Administrador contable (híbrido)",
+    company: "Agencia de promotoría",
+    location: "Palmas, Miguel Hidalgo, CDMX",
+    modality: "Híbrido (2 días Home Office)",
+    schedule: "L–V 9:00 a 18:00",
+    salary: "$25,000 – $30,000 MXN/mes",
+    requirements: [
+      "Lic. Contabilidad o Administración (titulado/a)",
+      "3+ años de experiencia",
+      "Excel intermedio",
+      "Facturación / impuestos / conciliaciones",
+    ],
+    benefits: ["Prestaciones de ley", "Estabilidad laboral", "Materiales de trabajo"],
+    contactLabel: "WhatsApp",
+    contactValue: "5580690344",
+  },
+  {
+    id: "mx-006",
+    title: "Gestor de cobranza en moto – Megacable",
+    company: "Megacable",
+    location: "Venustiano Carranza, CDMX",
+    modality: "Presencial",
+    schedule: "L–S 10:00 a 19:00 (domingo libre)",
+    salary: "$16,000 MXN/mes + comisiones",
+    requirements: [
+      "1 año en cobranza domiciliaria",
+      "Manejo de motocicleta",
+      "Licencia vigente (según CDMX/EDOMEX)",
+    ],
+    benefits: [
+      "Moto + gasolina/mantenimiento",
+      "Bonos semanales",
+      "Prestaciones superiores a ley",
+      "Capacitación pagada",
+    ],
+    contactLabel: "WhatsApp (Andrea Adame)",
+    contactValue: "4439144723",
+  },
+];
+
+function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
+    <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700">
       {children}
     </span>
   );
 }
 
-function Callout({
+function SectionTitle({
   title,
-  children,
+  subtitle,
 }: {
   title: string;
-  children: React.ReactNode;
+  subtitle?: string;
 }) {
   return (
-    <div className="not-prose rounded-2xl border bg-gray-50 p-5">
-      <div className="text-sm font-semibold text-gray-900">{title}</div>
-      <div className="mt-2 text-sm leading-relaxed text-gray-700">{children}</div>
-    </div>
-  );
-}
-
-function Checklist({ items }: { items: string[] }) {
-  return (
-    <ul className="not-prose mt-3 space-y-2">
-      {items.map((it) => (
-        <li key={it} className="flex items-start gap-2 text-sm text-gray-800">
-          <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border bg-white text-xs">
-            ✓
-          </span>
-          <span>{it}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function MiniExample({
-  title,
-  bad,
-  good,
-}: {
-  title: string;
-  bad: string;
-  good: string;
-}) {
-  return (
-    <div className="not-prose rounded-2xl border bg-white p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-gray-900">{title}</div>
-        <div className="flex gap-2">
-          <Badge>ATS</Badge>
-          <Badge>Reclutamiento</Badge>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl bg-red-50 p-4">
-          <div className="text-xs font-semibold text-red-700">Evita</div>
-          <pre className="mt-2 whitespace-pre-wrap text-sm text-red-900">
-            {bad}
-          </pre>
-        </div>
-
-        <div className="rounded-xl bg-green-50 p-4">
-          <div className="text-xs font-semibold text-green-700">Mejor</div>
-          <pre className="mt-2 whitespace-pre-wrap text-sm text-green-900">
-            {good}
-          </pre>
-        </div>
-      </div>
+    <div className="mb-4">
+      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+      {subtitle ? (
+        <p className="mt-1 text-sm text-neutral-600">{subtitle}</p>
+      ) : null}
     </div>
   );
 }
 
 export default function HomePage() {
-useEffect(() => {
-  gaEvent("view_home");
-}, []);
   return (
-    <main className="mx-auto max-w-6xl px-6 pb-28 pt-10">
-      {/* Hero */}
-      <header className="mb-10">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge>Compatible con ATS</Badge>
-          <Badge>México · Colombia · USA (ES)</Badge>
-          <Badge>PDF + Word</Badge>
+    <main className="mx-auto w-full max-w-6xl px-4 py-10">
+      {/* Top bar */}
+      <header className="mb-10 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <Link href="/" className="text-sm font-semibold tracking-tight">
+            atscv.pro
+          </Link>
+          <nav className="flex items-center gap-3 text-sm">
+            <Link
+              href="/tipscv"
+              className="rounded-lg px-3 py-2 text-neutral-700 hover:bg-neutral-100"
+            >
+              Tips CV
+            </Link>
+            <Link
+              href="/tool"
+              className="rounded-lg px-3 py-2 text-neutral-700 hover:bg-neutral-100"
+            >
+              Mejorar CV
+            </Link>
+            <Link
+              href="/create"
+              className="rounded-lg bg-black px-3 py-2 font-medium text-white hover:opacity-90"
+            >
+              Crear CV
+            </Link>
+          </nav>
         </div>
 
-        <h1 className="mt-4 text-4xl font-bold tracking-tight text-gray-900">
-          Currículums que pasan filtros ATS (sin inventar datos)
-        </h1>
+        {/* Hero */}
+        <div className="rounded-2xl border border-neutral-200 bg-white p-6 sm:p-10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                CV listo para postular, sin vueltas
+              </h1>
+              <p className="mt-3 text-base text-neutral-700">
+                Creá tu CV desde cero o mejorá uno existente. Además, te dejamos
+                ofertas con contacto directo y tips para postular mejor.
+              </p>
 
-        <p className="mt-3 max-w-3xl text-lg leading-relaxed text-gray-600">
-          En reclutamiento vemos muchísimos currículums. La mayoría no se descarta por falta
-          de capacidad, sino por formato, estructura o porque no está alineado al puesto.
-          Aquí tienes una guía práctica y dos herramientas para crear o mejorar tu CV con un estándar profesional.
-        </p>
-      </header>
-
-      <div className="grid gap-10 lg:grid-cols-[1fr_380px]">
-        {/* Article */}
-        <article className="space-y-10">
-          <section className="rounded-3xl border bg-white p-7 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900">
-              ¿Qué es un ATS y por qué puede dejarte fuera?
-            </h2>
-            <p className="mt-3 text-gray-700 leading-relaxed">
-              Un ATS (Applicant Tracking System) es el sistema que usan empresas y consultoras
-              para organizar y filtrar candidatos. Antes de que una persona lea tu CV, el ATS
-              intenta “interpretar” tu documento. Si tu CV está en columnas, con tablas, íconos
-              o diseños complejos, muchas veces se rompe y tu información queda mal leída.
-            </p>
-
-            <Callout title="Regla de oro (reclutamiento real)">
-              Tu CV debe ser fácil de leer para una persona y “parseable” para un ATS.
-              Menos diseño, más claridad.
-            </Callout>
-          </section>
-
-          <section className="rounded-3xl border bg-white p-7 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Estándar 2026: estructura simple + contenido específico
-            </h2>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border bg-gray-50 p-5">
-                <div className="text-sm font-semibold text-gray-900">Debe tener</div>
-                <Checklist
-                  items={[
-                    "Nombre y contacto al inicio (ideal 1–2 líneas)",
-                    "Resumen profesional breve (3–4 líneas)",
-                    "Competencias alineadas al puesto",
-                    "Experiencia con bullets (no párrafos largos)",
-                    "Herramientas/tecnologías (aunque sea Excel/Word)",
-                  ]}
-                />
-              </div>
-
-              <div className="rounded-2xl border bg-gray-50 p-5">
-                <div className="text-sm font-semibold text-gray-900">Evita</div>
-                <Checklist
-                  items={[
-                    "Tablas, columnas o diseños de dos columnas",
-                    "Emojis o íconos (pueden romper ATS)",
-                    "Secciones vacías tipo “(No se proporcionó…)”",
-                    "Un CV genérico para cualquier vacante",
-                    "Frases vacías: “proactivo”, “responsable” sin evidencia",
-                  ]}
-                />
-              </div>
-            </div>
-          </section>
-
-          <MiniExample
-            title="Bullets: de genérico a concreto (sin inventar métricas)"
-            bad={`• Responsable de tareas administrativas.\n• Apoyo en contabilidad.`}
-            good={`- Organicé y controlé documentación contable para mantener trazabilidad y orden interno.\n- Apoyé conciliaciones y reportes en Excel para cierres periódicos.\n- Coordiné con áreas internas/proveedores para resolver diferencias y asegurar continuidad operativa.`}
-          />
-
-          <section className="rounded-3xl border bg-white p-7 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900">
-              México / Colombia / USA (ES): matices que sí importan
-            </h2>
-
-            <div className="mt-4 space-y-4">
-              <Callout title="Foto en el CV">
-                En México y Colombia a veces se acepta, pero es opcional. En procesos de EE. UU.
-                por lo general no se recomienda. Por eso la herramienta te permite incluirla solo en PDF/DOCX
-                (sin afectar el texto ATS).
-              </Callout>
-
-              <Callout title="Ubicación y contacto">
-                En LATAM, teléfono/WhatsApp suele ayudar. Para EE. UU., mantenlo simple y evita datos sensibles
-                (nada de documentos, edad o estado civil).
-              </Callout>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border bg-white p-7 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900">
-              ¿Crear desde cero o mejorar tu CV actual?
-            </h2>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border bg-white p-5">
-                <div className="text-sm font-semibold text-gray-900">
-                  Crear CV desde cero
-                </div>
-                <p className="mt-2 text-sm leading-relaxed text-gray-700">
-                  Ideal si tu CV está desactualizado, está en formato “bonito” pero no ATS,
-                  o si nunca has tenido un documento consistente.
-                </p>
-                <ul className="mt-3 space-y-2 text-sm text-gray-700">
-                  <li>• Te guiamos por secciones</li>
-                  <li>• Genera un CV limpio y profesional</li>
-                  <li>• Exporta PDF y Word</li>
-                </ul>
-              </div>
-
-              <div className="rounded-2xl border bg-white p-5">
-                <div className="text-sm font-semibold text-gray-900">
-                  Mejorar CV existente
-                </div>
-                <p className="mt-2 text-sm leading-relaxed text-gray-700">
-                  Ideal si ya tienes contenido, pero necesitas reescritura, orden y palabras clave
-                  para un puesto específico.
-                </p>
-                <ul className="mt-3 space-y-2 text-sm text-gray-700">
-                  <li>• Respeta tu información (sin inventar)</li>
-                  <li>• Mejora claridad y compatibilidad ATS</li>
-                  <li>• Devuelve Markdown listo</li>
-                </ul>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Pill>Crear CV</Pill>
+                <Pill>Mejorar CV</Pill>
+                <Pill>Tips CV</Pill>
+                <Pill>Ofertas</Pill>
               </div>
             </div>
 
-            <Callout title="Consejo de reclutamiento">
-              Si te postulas a una vacante concreta, el mejor resultado viene de ajustar el CV
-              para ese puesto (palabras clave y experiencia relevante primero).
-            </Callout>
-          </section>
-
-          <section className="rounded-3xl border bg-white p-7 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Checklist final antes de postularte
-            </h2>
-
-            <Checklist
-              items={[
-                "¿Tu nombre y contacto se ven rápido y claro?",
-                "¿Tu resumen explica qué haces y a qué puesto apuntas (en 3–4 líneas)?",
-                "¿Cada empleo tiene al menos 1–2 bullets concretos?",
-                "¿Incluiste herramientas/tecnologías (Excel cuenta)?",
-                "¿Evitaste secciones vacías y frases de plantilla?",
-              ]}
-            />
-
-            <p className="mt-4 text-sm text-gray-600">
-              Tip: con esto ya estás mejor que la mayoría de CVs que llegan a una vacante.
-            </p>
-          </section>
-        </article>
-
-        {/* Sidebar */}
-        <aside className="h-fit lg:sticky lg:top-8">
-          <div className="rounded-3xl border bg-white p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Herramientas</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  Elige una opción y empieza en menos de 1 minuto.
-                </p>
-              </div>
-              <Badge>Gratis</Badge>
-            </div>
-
-            <div className="mt-5 space-y-3">
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[260px]">
               <Link
                 href="/create"
- onClick={() => gaEvent("click_create_cv")}
-                className="block w-full rounded-2xl bg-black px-4 py-3 text-center text-sm font-semibold text-white hover:bg-gray-800"
+                className="inline-flex items-center justify-center rounded-xl bg-black px-4 py-3 text-sm font-medium text-white hover:opacity-90"
               >
                 Crear CV desde cero
               </Link>
-
               <Link
                 href="/tool"
-onClick={() => gaEvent("click_improve_cv")}
-                className="block w-full rounded-2xl border px-4 py-3 text-center text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                className="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium hover:bg-neutral-50"
               >
-                Mejorar mi CV actual
+                Mejorar un CV existente
+              </Link>
+              <Link
+                href="/tipscv"
+                className="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium hover:bg-neutral-50"
+              >
+                Leer tips para un CV potente
               </Link>
             </div>
-
-            <div className="mt-5 rounded-2xl bg-gray-50 p-4">
-              <div className="text-xs font-semibold text-gray-900">Qué obtienes</div>
-              <ul className="mt-2 space-y-1 text-sm text-gray-700">
-                <li>• CV en formato ATS</li>
-                <li>• Score ATS + sugerencias</li>
-                <li>• Exporta PDF y Word</li>
-              </ul>
-            </div>
-
-            <p className="mt-4 text-xs text-gray-500">
-              No inventa datos. Solo mejora estructura y redacción con tu información.
-            </p>
-<p className="mt-2 text-[11px] text-gray-600">
-  Esta herramienta se mantiene con una <span className="font-medium">oferta gratuita opcional</span> para cubrir costos de operación (sin tarjeta).
-</p>
-
           </div>
-        </aside>
-      </div>
 
-      {/* Mobile sticky CTA */}
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-white/95 backdrop-blur lg:hidden">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-6 py-3">
-          <Link
-            href="/create"
-            className="flex-1 rounded-xl bg-black px-4 py-3 text-center text-sm font-semibold text-white"
-          >
-            Crear CV
-          </Link>
-          <Link
-            href="/tool"
-            className="flex-1 rounded-xl border px-4 py-3 text-center text-sm font-semibold text-gray-900"
-          >
-            Mejorar CV
-          </Link>
+          <div className="mt-6 rounded-xl bg-neutral-50 p-4 text-sm text-neutral-700">
+            Nota: no somos una bolsa de trabajo. Publicamos ofertas de forma
+            informativa. Para postular, usá siempre el contacto indicado en cada
+            vacante.
+          </div>
         </div>
-<p className="mt-2 text-[11px] text-gray-600">
-  Esta herramienta se mantiene con una <span className="font-medium">oferta gratuita opcional</span> para cubrir costos de operación (sin tarjeta).
-</p>
+      </header>
 
-      </div>
+      {/* Quick actions */}
+      <section className="mb-12 grid gap-4 md:grid-cols-3">
+        <Link
+          href="/create"
+          className="rounded-2xl border border-neutral-200 bg-white p-5 hover:bg-neutral-50"
+        >
+          <h3 className="text-base font-semibold">Crear CV desde cero</h3>
+          <p className="mt-2 text-sm text-neutral-600">
+            Ideal si no tenés CV, está desactualizado o querés uno limpio y
+            profesional.
+          </p>
+          <p className="mt-4 text-sm font-medium">Empezar →</p>
+        </Link>
+
+        <Link
+          href="/tool"
+          className="rounded-2xl border border-neutral-200 bg-white p-5 hover:bg-neutral-50"
+        >
+          <h3 className="text-base font-semibold">Mejorar CV existente</h3>
+          <p className="mt-2 text-sm text-neutral-600">
+            Pegá tu CV y obtené mejoras prácticas (formato, secciones y
+            claridad).
+          </p>
+          <p className="mt-4 text-sm font-medium">Mejorar →</p>
+        </Link>
+
+        <Link
+          href="/tipscv"
+          className="rounded-2xl border border-neutral-200 bg-white p-5 hover:bg-neutral-50"
+        >
+          <h3 className="text-base font-semibold">Tips CV</h3>
+          <p className="mt-2 text-sm text-neutral-600">
+            Guía corta para crear un CV potente y presentable.
+          </p>
+          <p className="mt-4 text-sm font-medium">Leer →</p>
+        </Link>
+      </section>
+
+      {/* Offers */}
+      <section className="mb-6">
+        <SectionTitle
+          title="Ofertas de hoy (MX)"
+          subtitle="Resumen informativo con contacto directo."
+        />
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {OFFERS_TODAY.map((o) => (
+            <article
+              key={o.id}
+              className="rounded-2xl border border-neutral-200 bg-white p-5"
+            >
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold tracking-tight">
+                      {o.title}
+                    </h3>
+                    <p className="mt-1 text-sm text-neutral-700">
+                      {o.company ? (
+                        <>
+                          <span className="font-medium">{o.company}</span>{" "}
+                          <span className="text-neutral-400">·</span>{" "}
+                        </>
+                      ) : null}
+                      <span>{o.location}</span>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {o.modality ? <Pill>{o.modality}</Pill> : null}
+                    {o.salary ? <Pill>{o.salary}</Pill> : null}
+                  </div>
+                </div>
+
+                {o.schedule ? (
+                  <p className="text-sm text-neutral-600">
+                    <span className="font-medium text-neutral-700">
+                      Horario:
+                    </span>{" "}
+                    {o.schedule}
+                  </p>
+                ) : null}
+
+                <div className="mt-3">
+                  <p className="text-sm font-medium text-neutral-800">
+                    Requisitos clave
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-700">
+                    {o.requirements.slice(0, 4).map((r, idx) => (
+                      <li key={idx}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                {o.benefits?.length ? (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-neutral-800">
+                      Ofrecen
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {o.benefits.slice(0, 6).map((b, idx) => (
+                        <Pill key={idx}>{b}</Pill>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 rounded-xl bg-neutral-50 p-4">
+                  <p className="text-sm text-neutral-800">
+                    <span className="font-medium">{o.contactLabel}:</span>{" "}
+                    <span className="font-semibold">{o.contactValue}</span>
+                  </p>
+                  {o.note ? (
+                    <p className="mt-1 text-xs text-neutral-600">{o.note}</p>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <Link
+                    href="/create"
+                    className="inline-flex flex-1 items-center justify-center rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
+                  >
+                    Crear CV para postular
+                  </Link>
+                  <Link
+                    href="/tool"
+                    className="inline-flex flex-1 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium hover:bg-neutral-50"
+                  >
+                    Mejorar mi CV
+                  </Link>
+                </div>
+
+                <p className="mt-2 text-xs text-neutral-500">
+                  Consejo: usá un CV simple (PDF/Doc), títulos claros y palabras
+                  clave del puesto.
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-5">
+          <p className="text-sm text-neutral-700">
+            ¿Querés que agreguemos más ofertas? Este listado es curado y se
+            actualiza manualmente.
+          </p>
+          <p className="mt-2 text-xs text-neutral-500">
+            Importante: si una empresa solicita datos sensibles, verificá la
+            legitimidad antes de enviar documentación.
+          </p>
+        </div>
+      </section>
+
+      <footer className="mt-12 border-t pt-6 text-xs text-neutral-500">
+        © {new Date().getFullYear()} atscv.pro · Recursos para CV y postulación
+      </footer>
+<IntentPopup delayMs={12000} dismissDays={10} />
     </main>
   );
 }
-
